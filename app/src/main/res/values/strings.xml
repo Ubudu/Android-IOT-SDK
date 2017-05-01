@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">IoT-Sample</string>
+    <string name="action_settings">Settings</string>
+    <string name="response_title">Response</string>
+    <string name="deadbeef">deadbeef</string>
+    <string name="send_message_to_dongle">Send message to dongle...</string>
+    <string name="connect">Connect</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="send_data">Send data</string>
+    <string name="message_title">Message for dongle</string>
+    <string name="advertising_title">IBeacon advertising</string>
+    <string name="advertise">advertise</string>
+    <string name="connection_title">Connection with:</string>
+    <string name="connecting">Connecting ...</string>
+    <string name="stop_advertising">Stop advertising</string>
+</resources>
