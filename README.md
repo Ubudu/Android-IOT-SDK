@@ -1,6 +1,7 @@
 # Android-IoT-SDK
 
-This SDK is dedicated to handling connection + bidirectional communication with the `ub_ble_scanner` device. SDK also provides an IBeacon advertising feature.
+This SDK is dedicated for handling discovery, connection and 2 way communication with the `ub_ble_scanner` dongle. 
+SDK also provides tools for BLE advertising and making mobile device act like a connectable `ub_ble_scanner` device.
 
 ## Installing
 
