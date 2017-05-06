@@ -6,21 +6,17 @@ This SDK is dedicated to handling connection + bidirectional communication with 
 
 Add Ubudu nexus repository url to your `build.gradle` file:
 
-```
 	repositories {
-		mavenCentral()
 		maven { url 'http://nexus.ubudu.com:8081/nexus/content/groups/public/' }
+		// ...
 	}
-```
     
 Then add the following dependency:
 
-```
     dependencies {
         compile('com.ubudu.iot:iot-sdk:1.1.0@aar')
-        // …
+        // ...
     }
-```
 
 ## How to use?
 
@@ -154,6 +150,7 @@ Stop advertising:
 To make that happen the following code should be called before starting to advertise:
 
 	peripheralManager = new PeripheralManager(getApplicationContext(), new DeviceProfile() {
+	
 		@Override
 		public String getServiceUuid() {
 			// service UUID to expose characteristics
@@ -181,26 +178,27 @@ To make that happen the following code should be called before starting to adver
 		}
 		
 		@Override
-       public void onConnectionStateChange(String stateDescription) {
-       	// outside device connection state changed
-       }
-       	
-       @Override
-       public void onCharacteristicWritten(UUID characteristicUUID, String value) {
-       	// on data received
-       }
-       
-       @Override
-       public void onCharacteristicRead(UUID characteristicUUID, String value) {
-       	// on data read
-       }
-       
-       @Override
-       public void onPeripheralError(Error error) {
-       	// error event
-       }
-    });
-    peripheralManager.openGattServer();
+		public void onConnectionStateChange(String stateDescription) {
+			// outside device connection state changed
+		}
+		
+		@Override
+		public void onCharacteristicWritten(UUID characteristicUUID, String value) {
+			// on data received
+		}
+		
+		@Override
+		public void onCharacteristicRead(UUID characteristicUUID, String value) {
+			// on data read
+		}
+		
+		@Override
+		public void onPeripheralError(Error error) {
+			// error event
+		}
+	});
+	
+	peripheralManager.openGattServer();
 
 To stop the device from being a connectable peripheral:
 
