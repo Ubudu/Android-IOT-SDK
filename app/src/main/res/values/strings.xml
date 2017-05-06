@@ -9,7 +9,7 @@
     <string name="send_data">Send data</string>
     <string name="message_title">Message for dongle</string>
     <string name="advertising_title">IBeacon advertising</string>
-    <string name="advertise">advertise</string>
+    <string name="advertise">Advertise</string>
     <string name="connection_title">Connection with:</string>
     <string name="connecting">Connecting ...</string>
     <string name="stop_advertising">Stop advertising</string>

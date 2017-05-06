@@ -1,4 +1,4 @@
-package com.ubudu.costacoffee;
+package com.ubudu.unittests;
 
 import org.junit.Test;
 

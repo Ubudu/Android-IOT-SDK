@@ -22,12 +22,16 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import com.ubudu.iot.dongle.Dongle;
+import com.ubudu.iot.ble.BleDeviceFilter;
 import com.ubudu.iot.dongle.DongleManager;
-import com.ubudu.iot.dongle.filter.DongleFilter;
-import com.ubudu.iot.ibeacon.Advertiser;
+import com.ubudu.iot.ble.Advertiser;
+import com.ubudu.iot.ibeacon.IBeacon;
+import com.ubudu.iot.peripheral.DeviceProfile;
+import com.ubudu.iot.peripheral.PeripheralManager;
 import com.ubudu.iot.sample.util.ToastUtil;
 
 import java.util.Arrays;
+import java.util.UUID;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
@@ -35,7 +39,7 @@ import butterknife.ButterKnife;
 public class MainActivity extends AppCompatActivity implements DongleManager.DiscoveryListener
         , Dongle.CommunicationListener
         , Dongle.ConnectionListener
-        , Advertiser.EventListener {
+        , Advertiser.AdvertisingListener, PeripheralManager.PeripheralListener {
 
     private static final String TAG = MainActivity.class.getSimpleName();
 
@@ -62,21 +66,21 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
     @BindView(R.id.separator_1)
     LinearLayout separatorLayout;
 
-    private Dongle mDongle;
-    private DongleManager dongleManager;
+    private Dongle dongle;
 
     private Advertiser advertiser;
+    private PeripheralManager peripheralManager;
 
-    private DongleFilter dongleFilter = new DongleFilter() {
+    private BleDeviceFilter bleDeviceFilter = new BleDeviceFilter() {
         @Override
-        public boolean isCorrect(BluetoothDevice device) {
-            return device.getName() != null && device.getName().equals(DEFAULT_DONGLE_NAME);
+        public boolean isCorrect(BluetoothDevice device, int rssi) {
+            return rssi > -40;//device.getName()!=null && device.getName().equals(DEFAULT_DONGLE_NAME);
         }
     };
 
     private void setDongle(Dongle dongle) {
-        mDongle = dongle;
-        mDongle.setConnectionListener(this);
+        this.dongle = dongle;
+        this.dongle.setConnectionListener(this);
     }
 
     @Override
@@ -89,11 +93,38 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
         setSupportActionBar(toolbar);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            advertiser = new Advertiser(getApplicationContext());
+            advertiser = Advertiser.getInstance();
             advertiser.setListener(this);
-        }
 
-        dongleManager = new DongleManager(getApplicationContext());
+            peripheralManager = new PeripheralManager(getApplicationContext(), new DeviceProfile() {
+                @Override
+                public String getServiceUuid() {
+                    return Dongle.SERVICE_UUID;
+                }
+
+                @Override
+                public String getWriteCharacteristicUuid() {
+                    return Dongle.WRITE_CHARACTERISTIC_UUID;
+                }
+
+                @Override
+                public String getReadCharacteristicUuid() {
+                    return Dongle.READ_CHARACTERISTIC_UUID;
+                }
+            });
+            peripheralManager.setEventListener(this);
+            peripheralManager.openGattServer();
+
+            final Handler mHandler = new Handler(Looper.getMainLooper());
+            mHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                        peripheralManager.writeData("time: "+System.currentTimeMillis());
+                    }mHandler.postDelayed(this,5000L);
+                }
+            });
+        }
 
         initUI();
 
@@ -110,7 +141,7 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
                     if (advertiser == null || !advertiser.isAdvertising()) {
                         advertise();
                     } else {
-                        advertiser.stopAdvertising();
+                        advertiser.stopAdvertising(getApplicationContext());
                     }
                 }
             }
@@ -126,10 +157,10 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
                 }
                 connectButton.setEnabled(false);
                 connectButton.setText(getResources().getString(R.string.connecting));
-                if (mDongle == null)
+                if (dongle == null)
                     findDongle();
                 else
-                    mDongle.disconnect();
+                    dongle.disconnect();
             }
         });
 
@@ -144,14 +175,14 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
                 sendDataButton.setEnabled(false);
                 String message = messageEditText.getText().toString();
                 byte[] data = message.getBytes();
-                mDongle.send(data);
+                dongle.send(data);
             }
         });
 
     }
 
     private void findDongle() {
-        dongleManager.findDongle(dongleFilter, this);
+        DongleManager.findDongle(getApplicationContext(), bleDeviceFilter, this);
     }
 
     private void initUI() {
@@ -208,15 +239,12 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
         Log.i(TAG, "Connected to dongle !");
         connectButton.setText(R.string.disconnect);
         connectButton.setEnabled(true);
-        separatorLayout.setVisibility(View.VISIBLE);
-        communicationLayout.setVisibility(View.VISIBLE);
-        mDongle.setCommunicationListener(this);
     }
 
     @Override
     public void onDisconnected() {
         Log.i(TAG, "Disconnected from dongle !");
-        mDongle = null;
+        dongle = null;
         connectButton.setText(R.string.connect);
         connectButton.setEnabled(true);
         separatorLayout.setVisibility(View.GONE);
@@ -224,9 +252,17 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
     }
 
     @Override
+    public void onReady() {
+        Log.i(TAG, "Dongle ready for communication !");
+        separatorLayout.setVisibility(View.VISIBLE);
+        communicationLayout.setVisibility(View.VISIBLE);
+        dongle.setCommunicationListener(this);
+    }
+
+    @Override
     public void onConnectionError(Error error) {
         Log.e(TAG, error.getLocalizedMessage());
-        mDongle = null;
+        dongle = null;
         connectButton.setText(R.string.connect);
         connectButton.setEnabled(true);
         separatorLayout.setVisibility(View.GONE);
@@ -255,7 +291,7 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     private void advertise() {
-        advertiser.advertise("67D37FC1-BE36-4EF5-A24D-D0ECD8119A7D", "12", "12", -55);
+        advertiser.advertise(getApplicationContext(), IBeacon.getAdvertiseBytes("67D37FC1-BE36-4EF5-A24D-D0ECD8119A7D", "12", "12", -55), true);
     }
 
     @Override
@@ -284,7 +320,7 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
     public void onDongleFound(Dongle dongle) {
         Log.i(TAG, "Dongle found");
         setDongle(dongle);
-        mDongle.connect(getApplicationContext());
+        this.dongle.connect(getApplicationContext());
     }
 
     @Override
@@ -293,5 +329,30 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
         ToastUtil.showToast(getApplicationContext(), error.getLocalizedMessage());
         connectButton.setText(getResources().getString(R.string.connect));
         connectButton.setEnabled(true);
+    }
+
+    @Override
+    public void onPeripheralReady() {
+        Log.i(TAG,"Peripheral is ready to handle communication with foreign devices");
+    }
+
+    @Override
+    public void onConnectionStateChange(String stateDescription) {
+        Log.d(TAG,"Foreign device connection to the peripheral manager state changed: "+stateDescription);
+    }
+
+    @Override
+    public void onCharacteristicWritten(UUID characteristicUUID, String value) {
+        Log.i(TAG,"onDataWritten: "+value);
+    }
+
+    @Override
+    public void onCharacteristicRead(UUID characteristicUUID, String value) {
+        Log.i(TAG,"onDataRead: "+value);
+    }
+
+    @Override
+    public void onPeripheralError(Error error) {
+        Log.e(TAG,error.getLocalizedMessage());
     }
 }

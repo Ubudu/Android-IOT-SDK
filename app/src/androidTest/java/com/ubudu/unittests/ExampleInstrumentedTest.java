@@ -1,4 +1,4 @@
-package com.ubudu.costacoffee;
+package com.ubudu.unittests;
 
 import android.content.Context;
 import android.support.test.InstrumentationRegistry;
@@ -21,6 +21,6 @@ public class ExampleInstrumentedTest {
         // Context of the app under test.
         Context appContext = InstrumentationRegistry.getTargetContext();
 
-        assertEquals("com.ubudu.costacoffee", appContext.getPackageName());
+        assertEquals("com.ubudu.unittests", appContext.getPackageName());
     }
 }
