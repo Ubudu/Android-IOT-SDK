@@ -2,6 +2,8 @@ package com.ubudu.iot.sample;
 
 import android.Manifest;
 import android.bluetooth.BluetoothDevice;
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -47,7 +49,7 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
     private static final int ASK_GEOLOCATION_PERMISSION_REQUEST_ON_CONNECT = 1;
     private static final int ASK_GEOLOCATION_PERMISSION_REQUEST_ON_SEND_DATA = 2;
 
-    private static final String DEFAULT_DONGLE_NAME = "ubScanner-1956";
+    private static final String PREF_NAME_DONGLE_NAME = "dongle_name";
 
     @BindView(R.id.send_message_edit_text)
     EditText messageEditText;
@@ -61,20 +63,22 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
     Button advertiseButton;
     @BindView(R.id.communication_layout)
     LinearLayout communicationLayout;
-    @BindView(R.id.connection_title)
-    TextView connectionTextView;
     @BindView(R.id.separator_1)
     LinearLayout separatorLayout;
+
+    @BindView(R.id.type_dongle_name)
+    EditText deviceNameEditText;
 
     private Dongle dongle;
 
     private Advertiser advertiser;
     private PeripheralManager peripheralManager;
+    private SharedPreferences mSharedPref;
 
     private BleDeviceFilter bleDeviceFilter = new BleDeviceFilter() {
         @Override
         public boolean isCorrect(BluetoothDevice device, int rssi) {
-            return device.getName()!=null && device.getName().equals(DEFAULT_DONGLE_NAME);
+            return device.getName()!=null && device.getName().equals(deviceNameEditText.getText().toString());
         }
     };
 
@@ -88,6 +92,10 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         ButterKnife.bind(this);
+
+        mSharedPref = getSharedPreferences("UbuduIotSdkPrefs", Context.MODE_PRIVATE);
+
+        deviceNameEditText.setText(mSharedPref.getString(PREF_NAME_DONGLE_NAME,""));
 
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
@@ -150,11 +158,21 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
         connectButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+
+                deviceNameEditText.setEnabled(false);
+
+                if (deviceNameEditText.getText().toString().equals("")) {
+                    ToastUtil.showToast(getApplicationContext(), "Please specify your dongle's name");
+                    deviceNameEditText.setEnabled(true);
+                    return;
+                }
+
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
                         && ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                     requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, ASK_GEOLOCATION_PERMISSION_REQUEST_ON_CONNECT);
                     return;
                 }
+                mSharedPref.edit().putString(PREF_NAME_DONGLE_NAME,deviceNameEditText.getText().toString()).apply();
                 connectButton.setEnabled(false);
                 connectButton.setText(getResources().getString(R.string.connecting));
                 if (dongle == null)
@@ -186,7 +204,6 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
     }
 
     private void initUI() {
-        connectionTextView.setText(getResources().getString(R.string.connection_title) + " " + DEFAULT_DONGLE_NAME);
         communicationLayout.setEnabled(false);
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
             advertiseButton.setEnabled(false);
@@ -245,6 +262,7 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
     public void onDisconnected() {
         Log.i(TAG, "Disconnected from dongle !");
         dongle = null;
+        deviceNameEditText.setEnabled(true);
         connectButton.setText(R.string.connect);
         connectButton.setEnabled(true);
         separatorLayout.setVisibility(View.GONE);
@@ -261,6 +279,7 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
 
     @Override
     public void onConnectionError(Error error) {
+        ToastUtil.showToast(getApplicationContext(),error.getLocalizedMessage());
         Log.e(TAG, error.getLocalizedMessage());
         dongle = null;
         connectButton.setText(R.string.connect);
@@ -354,5 +373,6 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
     @Override
     public void onPeripheralError(Error error) {
         Log.e(TAG,error.getLocalizedMessage());
+        ToastUtil.showToast(getApplicationContext(),error.getLocalizedMessage());
     }
 }

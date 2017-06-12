@@ -13,4 +13,6 @@
     <string name="connection_title">Connection with:</string>
     <string name="connecting">Connecting ...</string>
     <string name="stop_advertising">Stop advertising</string>
+    <string name="name_title">Device name:</string>
+    <string name="type_dongle_name">type your dongle name</string>
 </resources>
