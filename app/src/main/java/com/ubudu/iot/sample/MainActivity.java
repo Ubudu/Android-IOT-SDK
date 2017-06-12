@@ -47,7 +47,7 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
     private static final int ASK_GEOLOCATION_PERMISSION_REQUEST_ON_CONNECT = 1;
     private static final int ASK_GEOLOCATION_PERMISSION_REQUEST_ON_SEND_DATA = 2;
 
-    private static final String DEFAULT_DONGLE_NAME = "fa4fbd2bdd6b\n";
+    private static final String DEFAULT_DONGLE_NAME = "ubScanner-1956";
 
     @BindView(R.id.send_message_edit_text)
     EditText messageEditText;
@@ -74,7 +74,7 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
     private BleDeviceFilter bleDeviceFilter = new BleDeviceFilter() {
         @Override
         public boolean isCorrect(BluetoothDevice device, int rssi) {
-            return rssi > -40;//device.getName()!=null && device.getName().equals(DEFAULT_DONGLE_NAME);
+            return device.getName()!=null && device.getName().equals(DEFAULT_DONGLE_NAME);
         }
     };
 
