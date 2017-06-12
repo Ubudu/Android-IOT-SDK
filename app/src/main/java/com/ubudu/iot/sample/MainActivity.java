@@ -356,8 +356,8 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
     }
 
     @Override
-    public void onConnectionStateChange(String stateDescription) {
-        Log.d(TAG,"Foreign device connection to the peripheral manager state changed: "+stateDescription);
+    public void onConnectionStateChange(BluetoothDevice device, String stateDescription) {
+        Log.d(TAG,"Foreign device "+device.getName()+" connection to the peripheral manager state changed: "+stateDescription);
     }
 
     @Override

@@ -15,7 +15,7 @@ Add Ubudu nexus repository url to your `build.gradle` file:
 Then add the following dependency:
 
     dependencies {
-        compile('com.ubudu.iot:iot-sdk:1.1.1@aar')
+        compile('com.ubudu.iot:iot-sdk:1.2.0@aar')
         // ...
     }
 
@@ -147,7 +147,7 @@ To make that happen the following code should be called to setup the `BluetoothG
 		}
 		
 		@Override
-		public void onConnectionStateChange(String stateDescription) {
+		public void onConnectionStateChange(BluetoothDevice device, String stateDescription) {
 			// outside device connection state changed
 		}
 		
