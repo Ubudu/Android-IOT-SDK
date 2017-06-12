@@ -348,6 +348,7 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
         ToastUtil.showToast(getApplicationContext(), error.getLocalizedMessage());
         connectButton.setText(getResources().getString(R.string.connect));
         connectButton.setEnabled(true);
+        deviceNameEditText.setEnabled(true);
     }
 
     @Override
