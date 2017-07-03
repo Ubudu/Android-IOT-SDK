@@ -7,8 +7,6 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.support.annotation.NonNull;
 import android.support.annotation.RequiresApi;
 import android.support.v4.content.ContextCompat;
@@ -23,6 +21,8 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import com.ubudu.iot.Iot;
+import com.ubudu.iot.ble.BleDevice;
 import com.ubudu.iot.dongle.Dongle;
 import com.ubudu.iot.ble.BleDeviceFilter;
 import com.ubudu.iot.dongle.DongleManager;
@@ -39,8 +39,6 @@ import butterknife.BindView;
 import butterknife.ButterKnife;
 
 public class MainActivity extends AppCompatActivity implements DongleManager.DiscoveryListener
-        , Dongle.CommunicationListener
-        , Dongle.ConnectionListener
         , Advertiser.AdvertisingListener, PeripheralManager.PeripheralListener {
 
     private static final String TAG = MainActivity.class.getSimpleName();
@@ -69,22 +67,31 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
     @BindView(R.id.type_dongle_name)
     EditText deviceNameEditText;
 
-    private Dongle dongle;
+    private Dongle mDongle;
 
     private Advertiser advertiser;
     private PeripheralManager peripheralManager;
     private SharedPreferences mSharedPref;
 
+    private BleDevice.ReceiveDataEventListener mDataReceivedEventListener = new BleDevice.ReceiveDataEventListener() {
+        @Override
+        public void onDataReceived(byte[] data) {
+            String response = Arrays.toString(data);
+            Log.i(TAG, "Received data from dongle: " + response);
+            responseTextView.setText(response);
+        }
+    };
+
     private BleDeviceFilter bleDeviceFilter = new BleDeviceFilter() {
         @Override
-        public boolean isCorrect(BluetoothDevice device, int rssi) {
+        public boolean isCorrect(BluetoothDevice device, int rssi, byte[] scanResponse) {
             return device.getName()!=null && device.getName().equals(deviceNameEditText.getText().toString());
         }
     };
 
     private void setDongle(Dongle dongle) {
-        this.dongle = dongle;
-        this.dongle.setConnectionListener(this);
+        this.mDongle = dongle;
+        this.mDongle.setDataReceivedEventListener(mDataReceivedEventListener);
     }
 
     @Override
@@ -92,6 +99,8 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         ButterKnife.bind(this);
+
+        Log.i(TAG,"Using IOT-SDK version: " +Iot.getVersion() + " ("+Iot.getVersionCode()+")");
 
         mSharedPref = getSharedPreferences("UbuduIotSdkPrefs", Context.MODE_PRIVATE);
 
@@ -123,15 +132,15 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
             peripheralManager.setEventListener(this);
             peripheralManager.openGattServer();
 
-            final Handler mHandler = new Handler(Looper.getMainLooper());
-            mHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                        peripheralManager.writeData("time: "+System.currentTimeMillis());
-                    }mHandler.postDelayed(this,5000L);
-                }
-            });
+//            final Handler mHandler = new Handler(Looper.getMainLooper());
+//            mHandler.post(new Runnable() {
+//                @Override
+//                public void run() {
+//                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+//                        peripheralManager.writeData("time: "+System.currentTimeMillis());
+//                    }mHandler.postDelayed(this,5000L);
+//                }
+//            });
         }
 
         initUI();
@@ -175,10 +184,10 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
                 mSharedPref.edit().putString(PREF_NAME_DONGLE_NAME,deviceNameEditText.getText().toString()).apply();
                 connectButton.setEnabled(false);
                 connectButton.setText(getResources().getString(R.string.connecting));
-                if (dongle == null)
+                if (mDongle == null)
                     findDongle();
                 else
-                    dongle.disconnect();
+                    mDongle.disconnect();
             }
         });
 
@@ -193,14 +202,27 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
                 sendDataButton.setEnabled(false);
                 String message = messageEditText.getText().toString();
                 byte[] data = message.getBytes();
-                dongle.send(data);
+                mDongle.send(data, new BleDevice.SendDataEventListener() {
+                    @Override
+                    public void onDataSent(byte[] data) {
+                        String dataString = Arrays.toString(data);
+                        Log.i(TAG, "Data successfully sent: " + dataString);
+                        sendDataButton.setEnabled(true);
+                    }
+
+                    @Override
+                    public void onCommunicationError(Error error) {
+                        Log.e(TAG, error.getLocalizedMessage());
+                        ToastUtil.showToast(getApplicationContext(), error.getLocalizedMessage());
+                    }
+                });
             }
         });
 
     }
 
     private void findDongle() {
-        DongleManager.findDongle(getApplicationContext(), bleDeviceFilter, this);
+        DongleManager.findDongle(getApplicationContext(), 3000, bleDeviceFilter, this);
     }
 
     private void initUI() {
@@ -251,63 +273,6 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
         }
     }
 
-    @Override
-    public void onConnected() {
-        Log.i(TAG, "Connected to dongle !");
-        connectButton.setText(R.string.disconnect);
-        connectButton.setEnabled(true);
-    }
-
-    @Override
-    public void onDisconnected() {
-        Log.i(TAG, "Disconnected from dongle !");
-        dongle = null;
-        deviceNameEditText.setEnabled(true);
-        connectButton.setText(R.string.connect);
-        connectButton.setEnabled(true);
-        separatorLayout.setVisibility(View.GONE);
-        communicationLayout.setVisibility(View.GONE);
-    }
-
-    @Override
-    public void onReady() {
-        Log.i(TAG, "Dongle ready for communication !");
-        separatorLayout.setVisibility(View.VISIBLE);
-        communicationLayout.setVisibility(View.VISIBLE);
-        dongle.setCommunicationListener(this);
-    }
-
-    @Override
-    public void onConnectionError(Error error) {
-        ToastUtil.showToast(getApplicationContext(),error.getLocalizedMessage());
-        Log.e(TAG, error.getLocalizedMessage());
-        dongle = null;
-        connectButton.setText(R.string.connect);
-        connectButton.setEnabled(true);
-        separatorLayout.setVisibility(View.GONE);
-        communicationLayout.setVisibility(View.GONE);
-    }
-
-    @Override
-    public void onDataReceived(byte[] data) {
-        String response = Arrays.toString(data);
-        Log.i(TAG, "Received data from dongle: " + response);
-        responseTextView.setText(response);
-    }
-
-    @Override
-    public void onDataSent(byte[] data) {
-        String dataString = Arrays.toString(data);
-        Log.i(TAG, "Data successfully sent: " + dataString);
-        sendDataButton.setEnabled(true);
-    }
-
-    @Override
-    public void onCommunicationError(Error error) {
-        Log.e(TAG, error.getLocalizedMessage());
-        ToastUtil.showToast(getApplicationContext(), error.getLocalizedMessage());
-    }
-
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     private void advertise() {
         advertiser.advertise(getApplicationContext(), IBeacon.getAdvertiseBytes("67D37FC1-BE36-4EF5-A24D-D0ECD8119A7D", "12", "12", -55), true);
@@ -336,10 +301,59 @@ public class MainActivity extends AppCompatActivity implements DongleManager.Dis
     }
 
     @Override
-    public void onDongleFound(Dongle dongle) {
+    public boolean onDongleFound(Dongle dongle) {
         Log.i(TAG, "Dongle found");
         setDongle(dongle);
-        this.dongle.connect(getApplicationContext());
+        this.mDongle.connect(getApplicationContext(), new BleDevice.ConnectionListener() {
+            @Override
+            public void onConnected() {
+                Log.i(TAG, "Connected to dongle !");
+                connectButton.setText(R.string.disconnect);
+                connectButton.setEnabled(true);
+                separatorLayout.setVisibility(View.VISIBLE);
+                communicationLayout.setVisibility(View.VISIBLE);
+                mDongle.setDataReceivedEventListener(mDataReceivedEventListener);
+            }
+
+            @Override
+            public void onDisconnected() {
+                Log.i(TAG, "Disconnected from dongle !");
+                mDongle = null;
+                deviceNameEditText.setEnabled(true);
+                connectButton.setText(R.string.connect);
+                connectButton.setEnabled(true);
+                separatorLayout.setVisibility(View.GONE);
+                communicationLayout.setVisibility(View.GONE);
+            }
+
+            @Override
+            public void onConnectionError(Error error) {
+                ToastUtil.showToast(getApplicationContext(),error.getLocalizedMessage());
+                Log.e(TAG, error.getLocalizedMessage());
+                mDongle = null;
+                connectButton.setText(R.string.connect);
+                connectButton.setEnabled(true);
+                separatorLayout.setVisibility(View.GONE);
+                communicationLayout.setVisibility(View.GONE);
+            }
+        });
+        return true;
+    }
+
+    @Override
+    public void onDiscoveryStarted() {
+        Log.i(TAG, "BLE discovery started");
+    }
+
+    @Override
+    public void onDiscoveryFinished() {
+        Log.i(TAG, "BLE discovery finished");
+        if(mDongle==null) {
+            ToastUtil.showToast(getApplicationContext(), "Dongle not found");
+            connectButton.setText(getResources().getString(R.string.connect));
+            connectButton.setEnabled(true);
+            deviceNameEditText.setEnabled(true);
+        }
     }
 
     @Override

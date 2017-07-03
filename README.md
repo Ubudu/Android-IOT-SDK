@@ -15,7 +15,7 @@ Add Ubudu nexus repository url to your `build.gradle` file:
 Then add the following dependency:
 
     dependencies {
-        compile('com.ubudu.iot:iot-sdk:1.2.0@aar')
+        compile('com.ubudu.iot:iot-sdk:1.3.0@aar')
         // ...
     }
 
@@ -25,37 +25,55 @@ Then add the following dependency:
 
 Create an object implementing the `DongleFilter` interface. This interface is used to let the `DongleManager` class pick the desired device from all detectable devices nearby.:
 
-	DongleFilter dongleFilter = new DongleFilter() {
+	BleDeviceFilter dongleFilter = new BleDeviceFilter() {
         @Override
-        public boolean isCorrect(BluetoothDevice device) {
+        public boolean isCorrect(BluetoothDevice device, int rssi, byte[] scanResponse) {
         	// example implementation:
         	return device.getName() != null && device.getName().equals(MY_DONGLE_NAME);
         }
 	};
 
+**NOTE:** At this point on Android N `scanResponse` is always `null`.
+
 Then to discover a dongle:
 	
-	DongleManager.findDongle(dongleFilter, new DongleManager.DiscoveryListener() {
+	DongleManager.findDongle(getApplicationContext(), 5000, dongleFilter, new DongleManager.DiscoveryListener() {
 
 		@Override
-		public void onDongleFound(Dongle dongle) {
+		public boolean onDongleFound(Dongle dongle) {
 		//	matching dongle found
 			mDongle = dongle;
+			return true;
 		}
 	
 		@Override
 		public void onDiscoveryError(Error error) {
 			// Bluetooth LE discovery error
 		}
+
+       void onDiscoveryStarted() {
+       	// BLE discovery started
+       }
+
+       void onDiscoveryFinished() {
+       	// BLE discovery finished
+       }
 	});
 	
+The flow of discovery is as follows:
+
+- discovery lasts for the amount of milliseconds specified in the argument of `DongleManager.findDongle` method,
+ 
+- during this time all detected BLE devices matching the given `BleDeviceFilter` implementation are returned in the `onDongleFound` method,
+ 
+- if at some point the `onDongleFound` returns `true`, the discovery will be stopped immediately. 
+
 
 ### u\_ble\_scanner connection
 
-Before connecting to the detected dongle first set a connection interface:
+Then to connect to the dongle call the following:
 
-	mDongle.setConnectionListener(new Dongle.ConnectionListener() {
-	
+	mDongle.connect(mContextnew BleDevice.ConnectionListener() {
 		@Override
 		public void onConnected() {
 			// connected to dongle
@@ -67,19 +85,10 @@ Before connecting to the detected dongle first set a connection interface:
 		}
 		
 		@Override
-		public void onReady() {
-			// after this event the dongle is ready for handling sendData calls
-		}
-		
-		@Override
 		public void onConnectionError(Error error) {
 			// connection error
 		}
-    });
-
-To connect to the dongle instance received in the `onDongleFound(Dongle dongle)` event please call the following:
-
-	mDongle.connect(mContext);
+	});
 
 When a dongle is already connected to another device the `onConnectionError(error)` is called after a while.
 
@@ -89,22 +98,12 @@ To disconnect from the dongle please call:
 
 ### u\_ble\_scanner communication
 
-To communicate with the connected dongle first set a communication interface:
+Before communicating with the dongle a data received interface should be set:
 
-	mDongle.setCommunicationListener(new Dongle.CommunicationListener() {
+	mDongle.setDataReceivedEventListener(new BleDevice.ReceiveDataEventListener() {
 		@Override
 		public void onDataReceived(byte[] data) {
 			// data received from dongle
-		}
-		
-		@Override
-		public void onDataSent(byte[] data) {
-			// data sent to dongle
-		}
-		
-		@Override
-		public void onCommunicationError(Error error) {
-			// communication error
 		}
 	});
 
@@ -112,7 +111,17 @@ Then the `send(byte[] data)` can be called:
 
 	String message = "My message.";
 	byte[] data = message.getBytes();
-	mDongle.send(data);
+	mDongle.send(data, new BleDevice.SendDataEventListener() {
+		@Override
+		public void onDataSent(byte[] data) {
+			// data sent
+		}
+		
+		@Override
+		public void onCommunicationError(Error error) {
+			// communication error
+		}
+	});
 
 ### Make mobile device act as a connectable dongle
 
