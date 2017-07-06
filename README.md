@@ -15,7 +15,7 @@ Add Ubudu nexus repository url to your `build.gradle` file:
 Then add the following dependency:
 
     dependencies {
-        compile('com.ubudu.iot:iot-sdk:1.3.0@aar')
+        compile('com.ubudu.iot:iot-sdk:1.3.1@aar')
         // ...
     }
 
