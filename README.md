@@ -37,7 +37,7 @@ Create an object implementing the `DongleFilter` interface. This interface is us
 
 Then to discover a dongle:
 	
-	DongleManager.findDongle(getApplicationContext(), 5000, dongleFilter, new DongleManager.DiscoveryListener() {
+	DongleManager.findDongle(mContext, 5000, dongleFilter, new DongleManager.DiscoveryListener() {
 
 		@Override
 		public boolean onDongleFound(Dongle dongle) {
@@ -50,12 +50,14 @@ Then to discover a dongle:
 		public void onDiscoveryError(Error error) {
 			// Bluetooth LE discovery error
 		}
-
-       void onDiscoveryStarted() {
+		
+		@Override
+       public void onDiscoveryStarted() {
        	// BLE discovery started
        }
-
-       void onDiscoveryFinished() {
+       
+       @Override
+       public void onDiscoveryFinished() {
        	// BLE discovery finished
        }
 	});
@@ -73,7 +75,7 @@ The flow of discovery is as follows:
 
 Then to connect to the dongle call the following:
 
-	mDongle.connect(mContextnew BleDevice.ConnectionListener() {
+	mDongle.connect(mContext, new BleDevice.ConnectionListener() {
 		@Override
 		public void onConnected() {
 			// connected to dongle
@@ -127,7 +129,7 @@ Then the `send(byte[] data)` can be called:
 
 To make that happen the following code should be called to setup the `BluetoothGattServer`:
 
-	peripheralManager = new PeripheralManager(getApplicationContext(), new DeviceProfile() {
+	peripheralManager = new PeripheralManager(mContext, new DeviceProfile() {
 	
 		@Override
 		public String getServiceUuid() {
