@@ -1,7 +1,7 @@
 # Android-IoT-SDK
 
-This SDK is dedicated for handling discovery, connection and two way communication with the `ub_ble_scanner` dongle. 
-SDK also provides API to make mobile device act like a connectable `ub_ble_scanner` device.
+This SDK is dedicated for handling discovery, connection and two way communication with a BLE device. 
+SDK also provides API to make mobile device act like a connectable BLE device.
 
 ## Installing
 
@@ -15,13 +15,13 @@ Add Ubudu nexus repository url to your `build.gradle` file:
 Then add the following dependency:
 
     dependencies {
-        compile('com.ubudu.iot:iot-sdk:1.3.1@aar')
+        compile('com.ubudu.iot:iot-sdk:1.4.1@aar')
         // ...
     }
 
 ## How to use?
 
-### u\_ble\_scanner discovery
+### BLE discovery
 
 Create an object implementing the `DongleFilter` interface. This interface is used to let the `DongleManager` class pick the desired device from all detectable devices nearby.:
 
@@ -29,7 +29,7 @@ Create an object implementing the `DongleFilter` interface. This interface is us
         @Override
         public boolean isCorrect(BluetoothDevice device, int rssi, byte[] scanResponse) {
         	// example implementation:
-        	return device.getName() != null && device.getName().equals(MY_DONGLE_NAME);
+        	return device.getName() != null && device.getName().equals("MyDongle");
         }
 	};
 
@@ -71,9 +71,9 @@ The flow of discovery is as follows:
 - if at some point the `onDongleFound` returns `true`, the discovery will be stopped immediately. 
 
 
-### u\_ble\_scanner connection
+### BLE connection
 
-Then to connect to the dongle call the following:
+Then to connect to the BLE device call the following:
 
 	mDongle.connect(mContext, new BleDevice.ConnectionListener() {
 		@Override
@@ -92,15 +92,45 @@ Then to connect to the dongle call the following:
 		}
 	});
 
-When a dongle is already connected to another device the `onConnectionError(error)` is called after a while.
 
-To disconnect from the dongle please call:
+To disconnect from the device please call:
 
 	mDongle.disconnect();
 
-### u\_ble\_scanner communication
+### BLE communication
 
-Before communicating with the dongle a data received interface should be set:
+Before communicating with the BLE device its BLE services have to be discovered:
+
+    mDongle.discoverServices(new BleDevice.ServicesDiscoveryListener() {
+                @Override
+                public void onServicesDiscovered(List<BluetoothGattService> services) {
+                    // services found
+                }
+    
+                @Override
+                public void onError(Error error) {
+                    // error
+                }
+            });
+
+With the BLE services of the device discovered it is possible to establish a 2 way communication channel.
+In order to do this one GATT characteristic with WRITE permission and one with NOTIFICATIONS 
+permission have to be chosen. It is possible to set single GATT characteristic for both purposes:
+
+    mDongle.setGattCharacteristicForWriting(characteristic);
+    
+    dongle.registerForNotifications(characteristic, new BleDevice.RegisterForNotificationsListener() {
+                @Override
+                public void onRegistered(BluetoothGattCharacteristic characteristic) {
+                    // success
+                }
+    
+                @Override
+                public void onError(Error error) {
+                    // error
+                }
+            });
+    
 
 	mDongle.setDataReceivedEventListener(new BleDevice.ReceiveDataEventListener() {
 		@Override
@@ -109,11 +139,10 @@ Before communicating with the dongle a data received interface should be set:
 		}
 	});
 
-Then the `send(byte[] data)` can be called:
+Now when 2 way communication is set up the app can send data to the BLE device:
 
 	String message = "My message.";
-	byte[] data = message.getBytes();
-	mDongle.send(data, new BleDevice.SendDataEventListener() {
+	mDongle.send(message.getBytes(), new BleDevice.SendDataEventListener() {
 		@Override
 		public void onDataSent(byte[] data) {
 			// data sent
@@ -125,7 +154,7 @@ Then the `send(byte[] data)` can be called:
 		}
 	});
 
-### Make mobile device act as a connectable dongle
+### Make mobile device act as a connectable BLE device
 
 To make that happen the following code should be called to setup the `BluetoothGattServer`:
 
