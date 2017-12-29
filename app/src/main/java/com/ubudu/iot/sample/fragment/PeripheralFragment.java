@@ -85,6 +85,12 @@ public class PeripheralFragment extends BaseFragment {
     }
 
     @Override
+    public void onPause() {
+        super.onPause();
+        getViewController().onPeripheralFragmentPaused();
+    }
+
+    @Override
     public void onResume() {
         super.onResume();
         getViewController().onPeripheralFragmentResumed();

@@ -9,9 +9,6 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
-import android.media.AudioFormat;
-import android.media.AudioManager;
-import android.media.AudioTrack;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -41,11 +38,10 @@ import android.widget.ImageView;
 
 import com.afollestad.materialdialogs.DialogAction;
 import com.afollestad.materialdialogs.MaterialDialog;
-import com.crashlytics.android.Crashlytics;
 import com.ubudu.iot.ConnectionListener;
 import com.ubudu.iot.DataListener;
-import com.ubudu.iot.Iot;
 import com.ubudu.iot.DataSentListener;
+import com.ubudu.iot.Iot;
 import com.ubudu.iot.ble.Advertiser;
 import com.ubudu.iot.ble.BleDevice;
 import com.ubudu.iot.ble.BleDeviceFilter;
@@ -60,17 +56,13 @@ import com.ubudu.iot.sample.fragment.PeripheralFragment;
 import com.ubudu.iot.sample.fragment.ScannedDevicesFragment;
 import com.ubudu.iot.sample.model.LogItem;
 import com.ubudu.iot.sample.model.Option;
-import com.ubudu.iot.sample.sound.ADPCMDecoder;
 import com.ubudu.iot.sample.util.CustomTypefaceSpan;
 import com.ubudu.iot.sample.util.FragmentUtils;
 import com.ubudu.iot.sample.util.ToastUtil;
 import com.ubudu.iot.util.LongDataProtocol;
 import com.ubudu.iot.util.LongDataProtocolV2;
 
-import io.fabric.sdk.android.Fabric;
-
 import java.io.UnsupportedEncodingException;
-import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -79,6 +71,7 @@ import java.util.UUID;
 import butterknife.BindView;
 import butterknife.ButterKnife;
 
+@RequiresApi(api = Build.VERSION_CODES.M)
 public class MainActivity extends AppCompatActivity implements BaseFragment.ViewController
         , DiscoveryManager.DiscoveryListener {
 
@@ -88,6 +81,8 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
     private static final int ASK_GEOLOCATION_PERMISSION_REQUEST_ON_SCAN = 1;
     private static final int ASK_GEOLOCATION_PERMISSION_REQUEST_ON_SEND_DATA = 2;
 
+    private Handler mEncodeAudioHandler;
+
     private BleDevice mBleDevice;
     private BluetoothGattService selectedService;
     private Advertiser advertiser;
@@ -96,78 +91,60 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
     private PeripheralFragment peripheralFragment;
     private ScannedDevicesFragment scannedDevicesFragment;
 
+    private PeripheralManager peripheralManager;
+
+    private BluetoothGattCharacteristic gattCharForWriting;
+
+    private MenuItem scanMenuItem;
+
     private DrawerLayout mRootView;
 
     @BindView(R.id.navigation_view)
-    android.support.design.widget.NavigationView navigationView;
+    NavigationView navigationView;
     @BindView(R.id.toolbar)
     Toolbar toolbar;
 
     private View headerLayout;
     private MaterialDialog progressDialog;
-    private int pcmSamplingFrequencyHz;
-    private AudioTrack mAudioTrack;
-    private ADPCMDecoder mAdpcmDecoder;
+
     private SharedPreferences mSharedPref;
     private int rssiThreshold;
 
-    private Handler mAudioHandler;
-    private HandlerThread mAudioHandlerThread;
-
     private LongDataProtocol longDataProtocol;
+
+    private DataSentListener mDataSentListener = new DataSentListener() {
+        @Override
+        public void onDataSent(byte[] data) {
+            dismissProgressDialog();
+            Log.i(TAG, "Data successfully sent: " + Arrays.toString(data) );
+        }
+
+        @Override
+        public void onError(final Error error) {
+            Log.e(TAG, error.getLocalizedMessage());
+        }
+    };
 
     private DataListener mDataReceivedEventListener = new DataListener() {
         @Override
         public void onDataReceived(final byte[] data) {
-            Log.i(TAG, "Received data from ble device: " + String.format("%020x", new BigInteger(1, data)));
-            Log.i(TAG, "Received data len: " + data.length);
-            try {
-                if(data[0] != (byte)0xFA && commFragment!=null) {
-                    Log.e(TAG,"normal data...");
-                    String msg = new String(data, "UTF-8");
-                    commFragment.onDataReceived(msg);
-                } else if(data[0] == (byte)0xFA && mAdpcmDecoder!=null){
-                    final byte[] audioBytes = Arrays.copyOfRange(data, 1, data.length);
-                    Log.e(TAG,"audio bytes len: "+audioBytes.length);
-                    playAudioBytes(audioBytes);
 
-                }
-            } catch (UnsupportedEncodingException e) {
-                e.printStackTrace();
+            Log.i(TAG, "Received data len: " + data.length);
+            if (commFragment != null) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            commFragment.onDataReceived(new String(data, "UTF-8"));
+                        } catch (UnsupportedEncodingException e) {
+                            e.printStackTrace();
+                            commFragment.onDataReceived(new String(data));
+                        }
+                    }
+                });
             }
         }
     };
-
-    private void playAudioBytes(final byte[] audioBytes) {
-        mAudioHandler.post(new Runnable() {
-            @Override
-            public void run() {
-                if(mAdpcmDecoder==null)
-                    return;
-
-                if(audioBytes.length>ADPCMDecoder.FRAME_SIZE) {
-                    int iterations = audioBytes.length/ADPCMDecoder.FRAME_SIZE;
-                    byte[] block = new byte[ADPCMDecoder.FRAME_SIZE];
-                    for(int i=0;i<iterations;i++) {
-                        System.arraycopy(audioBytes, i*ADPCMDecoder.FRAME_SIZE, block, 0, ADPCMDecoder.FRAME_SIZE);
-                        addDataToDecoder(block);
-                    }
-                } else {
-                    addDataToDecoder(audioBytes);
-                }
-            }
-
-            private void addDataToDecoder(byte[] audioBytes) {
-                if (mBleDevice!=null && mBleDevice.getMtu() >131) { //Pre lollipop devices may not have the max mtu size hence the check
-                    final byte[] newData = new byte[ADPCMDecoder.FRAME_SIZE];
-                    System.arraycopy(audioBytes, 0, newData, 0, ADPCMDecoder.FRAME_SIZE);
-                    mAdpcmDecoder.add(newData);
-                } else {
-                    mAdpcmDecoder.add(audioBytes);
-                }
-            }
-        });
-    }
 
     private BleDeviceFilter bleDeviceFilter = new BleDeviceFilter() {
         @Override
@@ -197,7 +174,6 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
         scanMenuItem.setActionView(iv);
     }
 
-    private MenuItem scanMenuItem;
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
@@ -228,7 +204,6 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        Fabric.with(this, new Crashlytics());
 
         mRootView = (DrawerLayout) LayoutInflater.from(this).inflate(R.layout.activity_main, null);
         setContentView(mRootView);
@@ -236,10 +211,9 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
 
         longDataProtocol = new LongDataProtocolV2();
 
-        Log.i(TAG,"Using Ubudu IOT-SDK v"+Iot.getVersion()+"("+Iot.getVersionCode()+")");
+        Log.i(TAG,"Using Ubudu IOT-SDK v"+ Iot.getVersion()+"("+ Iot.getVersionCode()+")");
 
         mSharedPref = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
-        pcmSamplingFrequencyHz = mSharedPref.getInt("pcm_audio_sampling_frequency_hz", 8000);
         rssiThreshold = mSharedPref.getInt("rssi_filter_value", -90);
 
         initNavigationDrawer();
@@ -254,24 +228,31 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
                 @Override
                 public void onAdvertisingStarted() {
                     Log.i(TAG, "Advertising started.");
-                    peripheralFragment.onAdvertisingStarted();
+                    if(peripheralFragment!=null)
+                        peripheralFragment.onAdvertisingStarted();
+
+                    peripheralManager.openGattServer();
                 }
 
                 @Override
                 public void onAdvertisingStopped() {
                     Log.i(TAG, "Advertising stopped.");
-                    peripheralFragment.onAdvertisingStopped();
+                    if(peripheralFragment!=null)
+                        peripheralFragment.onAdvertisingStopped();
+                    if(peripheralManager!=null)
+                        peripheralManager.closeGattServer();
                 }
 
                 @Override
                 public void onAdvertisingError(Error error) {
                     Log.e(TAG, error.getLocalizedMessage());
                     ToastUtil.showToast(getApplicationContext(), error.getLocalizedMessage());
-                    peripheralFragment.onAdvertisingError(error.getMessage());
+                    if(peripheralFragment!=null)
+                        peripheralFragment.onAdvertisingError(error.getMessage());
                 }
             });
 
-            PeripheralManager peripheralManager = new PeripheralManager(getApplicationContext(), new DeviceProfile() {
+            peripheralManager = new PeripheralManager(getApplicationContext(), new DeviceProfile() {
                 @Override
                 public String getServiceUuid() {
                     return MyBleDevice.SERVICE_UUID;
@@ -297,6 +278,15 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
                 }
 
                 @Override
+                public void onPeripheralClosed() {
+                    String msg = "Peripheral closed";
+                    if (peripheralFragment != null)
+                        peripheralFragment.log(msg, LogItem.TYPE_MESSAGE);
+                    Log.i(TAG, msg);
+                }
+
+                private final Handler mHandler = new Handler();
+                @Override
                 public void onConnectionStateChange(BluetoothDevice device, String stateDescription) {
                     String msg = "Foreign device " + device.getName() + " connection to the peripheral manager state changed: " + stateDescription;
                     if (peripheralFragment != null)
@@ -305,16 +295,23 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
                 }
 
                 @Override
-                public void onCharacteristicWritten(UUID characteristicUUID, String value) {
-                    String msg = "onDataWritten: " + value;
-                    if (peripheralFragment != null)
-                        peripheralFragment.log(msg, LogItem.TYPE_MESSAGE);
+                public void onCharacteristicWritten(UUID characteristicUUID, final byte[] value) {
+                    final String msg = "onDataWritten: " + Arrays.toString(value);
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (peripheralFragment != null)
+                                peripheralFragment.log(msg, LogItem.TYPE_MESSAGE);
+                        }
+                    });
                     Log.d(TAG, msg);
+
+
                 }
 
                 @Override
-                public void onCharacteristicRead(UUID characteristicUUID, String value) {
-                    String msg = "onDataRead: " + value;
+                public void onCharacteristicRead(UUID characteristicUUID, byte[] value) {
+                    String msg = "onDataRead: " + new String(value);
                     if (peripheralFragment != null)
                         peripheralFragment.log(msg, LogItem.TYPE_MESSAGE);
                     Log.d(TAG, msg);
@@ -322,49 +319,18 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
 
                 @Override
                 public void onPeripheralError(Error error) {
-                    String msg = error.getLocalizedMessage();
-                    if (peripheralFragment != null)
-                        peripheralFragment.log(msg, LogItem.TYPE_MESSAGE);
+                    final String msg = error.getLocalizedMessage();
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (peripheralFragment != null)
+                                peripheralFragment.log(msg, LogItem.TYPE_MESSAGE);
+                        }
+                    });
                     Log.e(TAG, msg);
                     ToastUtil.showToast(getApplicationContext(), msg);
                 }
             });
-            peripheralManager.openGattServer();
-        }
-    }
-
-    @Override
-    protected void onDestroy() {
-        stopPcmPlayback();
-        super.onDestroy();
-    }
-
-    private void initPcmPlayback() {
-
-        // init handler that plays the data
-        mAudioHandlerThread = new HandlerThread("AudioHandlerThread");
-        mAudioHandlerThread.start();
-        mAudioHandler = new Handler(mAudioHandlerThread.getLooper());
-
-        int bufferSize = AudioTrack.getMinBufferSize(pcmSamplingFrequencyHz, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT);
-        mAudioTrack = new AudioTrack(AudioManager.STREAM_MUSIC, pcmSamplingFrequencyHz
-                , AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize, AudioTrack.MODE_STREAM);
-        mAudioTrack.play();
-        mAdpcmDecoder = new ADPCMDecoder(getApplicationContext(), false);
-        mAdpcmDecoder.setListener(new ADPCMDecoder.DecoderListener() {
-            @Override
-            public void onFrameDecoded(byte[] pcm, int frameNumber) {
-                if(mAudioTrack != null)
-                    mAudioTrack.write(pcm, 0, pcm.length/*, AudioTrack.WRITE_NON_BLOCKING*/);
-            }
-        });
-    }
-
-    private void stopPcmPlayback() {
-        if(mAudioTrack!=null) {
-            mAudioTrack.stop();
-            mAudioTrack = null;
-            mAdpcmDecoder = null;
         }
     }
 
@@ -434,12 +400,6 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
         mNewTitle.setSpan(new CustomTypefaceSpan("", font), 0, mNewTitle.length(), Spannable.SPAN_INCLUSIVE_INCLUSIVE);
         mi.setTitle(mNewTitle);
     }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-    }
-
     @Override
     public void onBackPressed() {
         if(!isScannedDevicesFragmentVisible)
@@ -570,7 +530,12 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
         navigationView.setCheckedItem(R.id.peripheral_item);
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    @Override
+    public void onPeripheralFragmentPaused() {
+
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.M)
     @Override
     public boolean isAdvertising() {
         return advertiser.isAdvertising();
@@ -584,17 +549,16 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
 
     @Override
     public void onCommFragmentResumed() {
-        initPcmPlayback();
+
     }
 
     @Override
     public void onCommFragmentPaused() {
-        stopPcmPlayback();
+
     }
 
     @Override
     public void onNameMacFilterChanged(String filter) {
-        Log.e(TAG,"saving filter: "+filter);
         mSharedPref.edit().putString("name_mac_filter_value",filter).apply();
     }
 
@@ -604,6 +568,7 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
         showProgressDialog(getString(R.string.connecting));
 
         this.mBleDevice = device;
+        this.mBleDevice.setDataSentListener(mDataSentListener);
         this.mBleDevice.setDataReceivedEventListener(mDataReceivedEventListener);
 
         // set long msg protocol for handling long data
@@ -726,7 +691,7 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
                     }
                 }
 
-                mBleDevice.setGattCharacteristicForWriting(selected);
+                gattCharForWriting = selected;
                 listener.onCompleted();
             }
 
@@ -803,13 +768,6 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
     }
 
     @Override
-    public void onAudioSampleRateChanged(int sampleRateHz) {
-        pcmSamplingFrequencyHz = sampleRateHz;
-        stopPcmPlayback();
-        initPcmPlayback();
-    }
-
-    @Override
     public void onRssiFilterThresholdChanged(int rssiThreshold) {
         mSharedPref.edit().putInt("rssi_filter_value",rssiThreshold).apply();
     }
@@ -826,7 +784,8 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
 
     @Override
     public void onScannedDevicesFragmentPaused() {
-        scanMenuItem.setVisible(false);
+        if(scanMenuItem!=null)
+            scanMenuItem.setVisible(false);
         isScannedDevicesFragmentVisible = false;
     }
 
@@ -897,34 +856,10 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
     }
 
     @Override
-    public void onSendMessageRequested(String message) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
-                && ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, ASK_GEOLOCATION_PERMISSION_REQUEST_ON_SEND_DATA);
-            return;
+    public void onSendMessageRequested(byte[] data) {
+        if(gattCharForWriting!=null && mBleDevice!=null && mBleDevice.isConnected()) {
+            mBleDevice.send(data, gattCharForWriting, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
         }
-
-        byte[] data = new byte[0];
-        try {
-            data = (message).getBytes("UTF-8");
-        } catch (UnsupportedEncodingException e) {
-            e.printStackTrace();
-        }
-        mBleDevice.send(data, new DataSentListener() {
-            @Override
-            public void onDataSent(byte[] data) {
-                dismissProgressDialog();
-                Log.i(TAG, "Data successfully sent: " + String.format("%020x", new BigInteger(1, data)));
-                commFragment.onMessageSendingFinished();
-            }
-
-            @Override
-            public void onError(Error error) {
-                Log.e(TAG, error.getLocalizedMessage());
-                ToastUtil.showToast(getApplicationContext(), error.getLocalizedMessage());
-                commFragment.onMessageSendingFinished();
-            }
-        });
     }
 
     public interface ChooseListener {

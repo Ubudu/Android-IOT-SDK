@@ -18,12 +18,33 @@
     app:layout_constraintVertical_bias="0.0"
     tools:context=".fragment.BaseFragment">
 
+    <Button
+        android:id="@+id/disconnect_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:text="@string/disconnect" />
+
+    <LinearLayout
+        android:id="@+id/separator"
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/colorSecondaryText"
+        android:layout_above="@id/disconnect_button"/>
+
+    <ScrollView
+        android:id="@+id/scrollView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_above="@id/separator">
 
         <LinearLayout
             android:id="@+id/communication_layout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
+            android:scrollbars="vertical"
             android:paddingEnd="15dp"
             android:paddingStart="15dp"
             android:visibility="visible">
@@ -34,13 +55,27 @@
                 android:layout_height="wrap_content"
                 android:text="@string/message_title" />
 
-            <EditText
-                android:id="@+id/send_message_edit_text"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:ems="10"
-                android:hint="@string/send_message_to_dongle"
-                android:text="@string/deadbeef" />
+                android:orientation="horizontal"
+                android:weightSum="1">
+
+                <EditText
+                    android:id="@+id/send_message_edit_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="100dp"
+                    android:ems="10"
+                    android:hint="@string/send_message_to_dongle"
+                    android:text="@string/deadbeef"
+                    android:layout_weight="0.7"/>
+                <Button
+                    android:id="@+id/send_data_button"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/send_data"
+                    android:layout_weight="0.3"/>
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/response_title"
@@ -51,19 +86,34 @@
             <TextView
                 android:id="@+id/response_text_view"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
+                android:layout_height="100dp" />
 
-            <Button
-                android:id="@+id/send_data_button"
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/send_data" />
+                android:layout_height="1dp"
+                android:background="@color/colorSecondaryText" />
 
             <CheckBox
                 android:id="@+id/set_bytes_count_mode"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/set_bytes_count_mode" />
+
+            <TextView
+                android:id="@+id/bytes_count_text_view"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/bytes_array_length"
+                android:visibility="gone" />
+
+            <EditText
+                android:id="@+id/bytes_count_edit_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ems="5"
+                android:inputType="number"
+                android:text="100"
+                android:visibility="gone" />
 
             <CheckBox
                 android:id="@+id/stream"
@@ -75,35 +125,35 @@
                 android:id="@+id/iteration_delay_text_view"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:visibility="gone"
-                android:text="@string/iteration_delay_title" />
+                android:text="@string/iteration_delay_title"
+                android:visibility="gone" />
 
             <EditText
                 android:id="@+id/stream_delay_edit_text"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:ems="5"
-                android:visibility="gone"
-                android:text="100"
                 android:hint="@string/stream_delay"
-                android:inputType="number" />
+                android:inputType="number"
+                android:text="100"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/iterations_text_view"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:visibility="gone"
-                android:text="@string/iterations_title" />
+                android:text="@string/iterations_title"
+                android:visibility="gone" />
 
             <EditText
                 android:id="@+id/stream_iterations_edit_text"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:ems="5"
-                android:text="10"
-                android:visibility="gone"
                 android:hint="@string/stream_iterations"
-                android:inputType="number" />
+                android:inputType="number"
+                android:text="10"
+                android:visibility="gone" />
 
             <CheckBox
                 android:id="@+id/loopback_mode"
@@ -112,12 +162,6 @@
                 android:text="@string/loopback_mode" />
 
         </LinearLayout>
-
-    <Button
-        android:id="@+id/disconnect_button"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
-        android:text="@string/disconnect" />
+    </ScrollView>
 
 </RelativeLayout>

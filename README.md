@@ -1,7 +1,7 @@
 # Android-IoT-SDK
 
-This SDK is dedicated for handling discovery, connection and two way communication with a BLE device. 
-SDK also provides API to make mobile device act like a connectable BLE device.
+This SDK is dedicated for handling discovery, connection and two way communication with a Bluetooth LE device. 
+SDK also provides API to make mobile device act like a connectable Bluetooth LE device.
 
 ## Installing
 
@@ -14,18 +14,16 @@ Add Ubudu nexus repository url to your `build.gradle` file:
     
 Then add the following dependency:
 
-    dependencies {
-        compile('com.ubudu.iot:iot-sdk:1.4.1@aar')
-        // ...
-    }
+    compile('com.ubudu.iot:iot-sdk:1.5.0@aar')
 
 ## How to use?
 
-### BLE discovery
+### Bluetooth LE discovery
 
-Create an object implementing the `DongleFilter` interface. This interface is used to let the `DongleManager` class pick the desired device from all detectable devices nearby.:
+Create an object implementing the `BleDeviceFilter` interface. This interface is used to let
+the `DiscoveryManager` class pick the desired device from all devices being detected nearby.:
 
-	BleDeviceFilter dongleFilter = new BleDeviceFilter() {
+	BleDeviceFilter bleDeviceFilter = new BleDeviceFilter() {
         @Override
         public boolean isCorrect(BluetoothDevice device, int rssi, byte[] scanResponse) {
         	// example implementation:
@@ -33,16 +31,17 @@ Create an object implementing the `DongleFilter` interface. This interface is us
         }
 	};
 
-**NOTE:** At this point on Android N `scanResponse` is always `null`.
-
-Then to discover a dongle:
+Then to discover a Bluetooth LE device:
 	
-	DongleManager.findDongle(mContext, 5000, dongleFilter, new DongleManager.DiscoveryListener() {
+	DiscoveryManager.discover(mContext, 5000, bleDeviceFilter, new DiscoveryManager.DiscoveryListener() {
 
 		@Override
-		public boolean onDongleFound(Dongle dongle) {
-		//	matching dongle found
-			mDongle = dongle;
+		public boolean onBleDeviceFound(BleDevice bleDevice) {
+		    // ble device that matches the given bfound
+			mBleDevice = bleDevice;
+			// Returning true will stop the BLE device scanner immediately.
+            // Returning false will make scanning last according to
+            // given duration or until stop() is called.
 			return true;
 		}
 	
@@ -64,18 +63,18 @@ Then to discover a dongle:
 	
 The flow of discovery is as follows:
 
-- discovery lasts for the amount of milliseconds specified in the argument of `DongleManager.findDongle` method,
+- discovery lasts for the amount of milliseconds specified in the argument of `DiscoveryManager.discover` method,
  
-- during this time all detected BLE devices matching the given `BleDeviceFilter` implementation are returned in the `onDongleFound` method,
+- during this time all detected Bluetooth LE devices matching the given `BleDeviceFilter` implementation are returned in the `onBleDeviceFound` callback,
  
-- if at some point the `onDongleFound` returns `true`, the discovery will be stopped immediately. 
+- if at some point the `onBleDeviceFound` implementation returns `true`, the discovery will be stopped immediately. 
 
 
-### BLE connection
+### Bluetooth LE connection
 
 Then to connect to the BLE device call the following:
 
-	mDongle.connect(mContext, new BleDevice.ConnectionListener() {
+	mBleDevice.connect(mContext, new BleDevice.ConnectionListener() {
 		@Override
 		public void onConnected() {
 			// connected to dongle
@@ -95,68 +94,81 @@ Then to connect to the BLE device call the following:
 
 To disconnect from the device please call:
 
-	mDongle.disconnect();
+	mBleDevice.disconnect();
 
-### BLE communication
+### Bluetooth LE communication
 
-Before communicating with the BLE device its BLE services have to be discovered:
+Before communicating with the device its Bluetooth GATT services have to be discovered:
 
-    mDongle.discoverServices(new BleDevice.ServicesDiscoveryListener() {
-                @Override
-                public void onServicesDiscovered(List<BluetoothGattService> services) {
-                    // services found
-                }
+    mBleDevice.discoverServices(new BleDevice.ServicesDiscoveryListener() {
+        @Override
+        public void onServicesDiscovered(List<BluetoothGattService> services) {
+            // services found
+        }
+        
+        @Override
+        public void onError(Error error) {
+            // error
+        }
+    });
+
+With the Bluetooth LE services of the device discovered it is possible to establish a 2 way 
+communication channel:
+
+1) In order to be able to receive data from Bluetooth LE device one of the GATT characteristics 
+available within one of the services should have `BluetoothGattCharacteristic.PROPERTY_NOTIFY` property.
+2) In order to be able to send data to Bluetooth LE device one of the GATT characteristics 
+available within one of the services should have `BluetoothGattCharacteristic.PROPERTY_WRITE` or 
+`BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE` property.
+
+It is possible to use single GATT characteristic for both purposes if device provides such characteristic.
     
-                @Override
-                public void onError(Error error) {
-                    // error
-                }
-            });
+    mBleDevice.registerForNotifications(characteristic, new BleDevice.RegisterForNotificationsListener() {
+        @Override
+        public void onRegistered(BluetoothGattCharacteristic gattCharacteristic) {
+            // success
+        }
+        
+        @Override
+        public void onError(Error error) {
+            // error
+        }
+    });
+            
+Data being received from the Bleutooth LE device is received by the listener interface that has to be set:
 
-With the BLE services of the device discovered it is possible to establish a 2 way communication channel.
-In order to do this one GATT characteristic with WRITE permission and one with NOTIFICATIONS 
-permission have to be chosen. It is possible to set single GATT characteristic for both purposes:
+    mBleDevice.setDataReceivedEventListener(new DataListener() {
+        @Override
+        public void onDataReceived(byte[] data) {
+            // data received from the device
+    	}
+    });
 
-    mDongle.setGattCharacteristicForWriting(characteristic);
-    
-    dongle.registerForNotifications(characteristic, new BleDevice.RegisterForNotificationsListener() {
-                @Override
-                public void onRegistered(BluetoothGattCharacteristic characteristic) {
-                    // success
-                }
-    
-                @Override
-                public void onError(Error error) {
-                    // error
-                }
-            });
-    
+The `DataListener` can be set any time before registering for notifications, e.g. right after successful connection.
 
-	mDongle.setDataReceivedEventListener(new BleDevice.ReceiveDataEventListener() {
-		@Override
-		public void onDataReceived(byte[] data) {
-			// data received from dongle
-		}
-	});
 
-Now when 2 way communication is set up the app can send data to the BLE device:
+To send data to the Bleutooth LE device:
 
 	String message = "My message.";
-	mDongle.send(message.getBytes(), new BleDevice.SendDataEventListener() {
-		@Override
-		public void onDataSent(byte[] data) {
-			// data sent
-		}
-		
-		@Override
-		public void onCommunicationError(Error error) {
-			// communication error
-		}
+	mBleDevice.send(message.getBytes(), gattCharacteristic);
+
+To be notified about the result of sending the data a `DataSentListener` implementation must be set on the `BleDevice` instance:
+
+	mBleDevice.setDataSentListener(new DataSentListener() {
+	    @Override
+	    public void onDataSent(byte[] data) {
+	        // data sent successfuly
+	    }
+	    
+	    @Override
+	    public void onError(Error error) {
+	        // error
+	    }
 	});
 
-### Make mobile device act as a connectable BLE device
+### Make mobile device act as a connectable Bluetooth LE device
 
-To make that happen the following code should be called to setup the `BluetoothGattServer`:
+To make that happen the Bluetooth GATT server has to be opened. The following code configures it:
 
 	peripheralManager = new PeripheralManager(mContext, new DeviceProfile() {
 	
@@ -207,6 +219,8 @@ To make that happen the following code should be called to setup the `BluetoothG
 		}
 	});
 	
+To open the Bluetooth GATT server:
+
 	peripheralManager.openGattServer();
 
 To stop the device from being a connectable peripheral:
@@ -244,3 +258,9 @@ Start advertising as IBeacon:
 To stop advertising at any time call the following:
 
 	advertiser.stopAdvertising();
+	
+Foreign Bluetooth LE device can register for notifications to the read characteristic specified in `getReadCharacteristicUuid` method being a `DeviceProfile` implementation. If mobile device acting as peripheral wants to write some data to the foreign device then this read characteristic must be written. It is done when the following method is used:
+
+	peripheralManager.writeData(data);
+	
+The data received from the foreign device will trigger a `onCharacteristicWritten` callback of the given `PeripheralManager.PeripheralListener` instance.

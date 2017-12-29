@@ -56,11 +56,12 @@ public class BaseFragment extends Fragment {
         void onScannedDevicesFragmentResumed();
         void onAdvertiseRequested();
         void onScanningRequested();
-        void onSendMessageRequested(String message);
+        void onSendMessageRequested(byte[] data);
         void onScannedDevicesFragmentPaused();
 
         void onPeripheralFragmentRequested();
         void onPeripheralFragmentResumed();
+        void onPeripheralFragmentPaused();
 
         boolean isAdvertising();
 
@@ -71,8 +72,6 @@ public class BaseFragment extends Fragment {
         void onConnectionRequested(BleDevice device);
 
         void onDisconnectRequested();
-
-        void onAudioSampleRateChanged(int sampleRateHz);
 
         void onRssiFilterThresholdChanged(int rssiThreshold);
 

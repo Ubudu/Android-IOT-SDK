@@ -1,6 +1,5 @@
 package com.ubudu.iot.sample.fragment;
 
-import android.content.Context;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.text.Editable;
@@ -9,8 +8,6 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.WindowManager;
-import android.view.inputmethod.InputMethodManager;
 import android.widget.AdapterView;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -82,6 +79,7 @@ public class ScannedDevicesFragment extends BaseFragment {
                 rssiThreshold = -(100-value);
                 getViewController().onRssiFilterThresholdChanged(rssiThreshold);
                 filterValueTextView.setText(String.valueOf(rssiThreshold) + " dBm");
+                filterDevices(filterEditText.getText().toString(),rssiThreshold);
             }
 
             @Override
@@ -112,7 +110,7 @@ public class ScannedDevicesFragment extends BaseFragment {
             public void onTextChanged(CharSequence charSequence, int i, int i1, int i2) {
                 Log.e(TAG,"charSequence: "+charSequence);
                 nameMacFilter = charSequence.toString();
-                filterDevices(nameMacFilter);
+                filterDevices(nameMacFilter, rssiThreshold);
             }
 
             @Override
@@ -125,14 +123,14 @@ public class ScannedDevicesFragment extends BaseFragment {
 
     }
 
-    private void filterDevices(String filter) {
+    private void filterDevices(String filter, int rssiThreshold) {
 
         for(int i = 0; i<removedDevices.size(); i++) {
             BleDevice device = removedDevices.get(i);
             Log.e(TAG,"should BRING BACK device: "+device.getDevice().getName());
-            if( filter.isEmpty()
+            if( (filter.isEmpty()
                     || (device.getDevice().getName() != null && device.getDevice().getName().contains(filter))
-                    || (device.getDevice().getAddress().contains(filter))){
+                    || (device.getDevice().getAddress().contains(filter))) && device.getRssi() >= rssiThreshold){
                 adapter.add(device);
                 removedDevices.remove(i);
                 i--;
@@ -149,7 +147,7 @@ public class ScannedDevicesFragment extends BaseFragment {
             if(!filter.isEmpty()
                     && (device.getDevice().getName()==null
                         || ( (device.getDevice().getName()!=null && !device.getDevice().getName().contains(filter))
-                            && !device.getDevice().getAddress().contains(filter)))) {
+                            && !device.getDevice().getAddress().contains(filter))) || device.getRssi()<rssiThreshold) {
                 removedDevices.add(device);
                 adapter.remove(device);
                 i--;

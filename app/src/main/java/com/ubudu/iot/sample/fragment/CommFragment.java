@@ -2,10 +2,9 @@ package com.ubudu.iot.sample.fragment;
 
 import android.os.Bundle;
 import android.support.annotation.Nullable;
-import android.support.v7.widget.PopupMenu;
-import android.text.InputType;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.LayoutInflater;
-import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
@@ -18,6 +17,8 @@ import android.widget.TextView;
 
 import com.ubudu.iot.sample.R;
 import com.ubudu.iot.sample.util.ToastUtil;
+
+import java.io.UnsupportedEncodingException;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
@@ -41,7 +42,7 @@ public class CommFragment extends BaseFragment {
     @BindView(R.id.loopback_mode)
     CheckBox loopBackModeCheckBox;
     @BindView(R.id.set_bytes_count_mode)
-    CheckBox byteCountMode;
+    CheckBox ascendingBytesModeCheckBox;
     @BindView(R.id.stream)
     CheckBox streamCheckBox;
     @BindView(R.id.stream_delay_edit_text)
@@ -52,7 +53,12 @@ public class CommFragment extends BaseFragment {
     TextView iterationsTextView;
     @BindView(R.id.iteration_delay_text_view)
     TextView iterationDelayTextView;
-
+    @BindView(R.id.message_text_view)
+    TextView messageTitleTextView;
+    @BindView(R.id.bytes_count_edit_text)
+    EditText bytesCountEditText;
+    @BindView(R.id.bytes_count_text_view)
+    TextView bytesCountTextView;
     @BindView(R.id.communication_layout)
     LinearLayout communicationLayout;
 
@@ -96,27 +102,68 @@ public class CommFragment extends BaseFragment {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 if(isChecked){
+                    ascendingBytesModeCheckBox.setChecked(false);
+                    streamCheckBox.setChecked(false);
+                    ascendingBytesModeCheckBox.setChecked(false);
+
+                    ascendingBytesModeCheckBox.setEnabled(false);
+                    streamCheckBox.setEnabled(false);
+
                     messageEditText.setText("");
                     messageEditText.setEnabled(false);
                     sendDataButton.setVisibility(View.GONE);
                 } else {
                     messageEditText.setEnabled(true);
                     sendDataButton.setVisibility(View.VISIBLE);
+
+                    ascendingBytesModeCheckBox.setEnabled(true);
+                    streamCheckBox.setEnabled(true);
                 }
             }
         });
 
-        byteCountMode.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+        ascendingBytesModeCheckBox.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 if(isChecked){
-                    messageEditText.setText("");
-                    messageEditText.setHint("Type message size");
-                    messageEditText.setInputType(InputType.TYPE_CLASS_NUMBER);
+                    bytesCountTextView.setVisibility(View.VISIBLE);
+                    bytesCountEditText.setVisibility(View.VISIBLE);
+                    messageEditText.setEnabled(false);
+                    messageEditText.setText(getAscendingBytesDataString(Integer.parseInt(bytesCountEditText.getText().toString())));
+
+                    loopBackModeCheckBox.setEnabled(false);
+
+                    bytesCountEditText.addTextChangedListener(new TextWatcher() {
+                        @Override
+                        public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+
+                        }
+
+                        @Override
+                        public void onTextChanged(CharSequence s, int start, int before, int count) {
+                            try {
+                                messageEditText.setText(getAscendingBytesDataString(Integer.parseInt(bytesCountEditText.getText().toString())));
+                            } catch(Exception e) {
+                                messageEditText.setText(getAscendingBytesDataString(1));
+                                e.printStackTrace();
+                            }
+                        }
+
+                        @Override
+                        public void afterTextChanged(Editable s) {
+
+                        }
+                    });
+
                 } else {
+                    if(!streamCheckBox.isChecked()) {
+                        loopBackModeCheckBox.setEnabled(true);
+                    }
+                    bytesCountTextView.setVisibility(View.GONE);
+                    bytesCountEditText.setVisibility(View.GONE);
+                    messageEditText.setEnabled(true);
+                    messageTitleTextView.setText(getResources().getString(R.string.string_message));
                     messageEditText.setText("");
-                    messageEditText.setHint("Type string message");
-                    messageEditText.setInputType(InputType.TYPE_CLASS_TEXT);
                 }
             }
         });
@@ -125,11 +172,15 @@ public class CommFragment extends BaseFragment {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 if(isChecked) {
+                    loopBackModeCheckBox.setEnabled(false);
                     streamDelayEditText.setVisibility(View.VISIBLE);
                     streamIterationsEditText.setVisibility(View.VISIBLE);
                     iterationsTextView.setVisibility(View.VISIBLE);
                     iterationDelayTextView.setVisibility(View.VISIBLE);
                 } else {
+                    if(!ascendingBytesModeCheckBox.isChecked()) {
+                        loopBackModeCheckBox.setEnabled(true);
+                    }
                     streamDelayEditText.setVisibility(View.GONE);
                     streamIterationsEditText.setVisibility(View.GONE);
                     iterationsTextView.setVisibility(View.GONE);
@@ -148,18 +199,7 @@ public class CommFragment extends BaseFragment {
     }
 
     public void requestSend() {
-        sendDataButton.setEnabled(false);
-        String output = "";
-        if(!byteCountMode.isChecked()) {
-            output = messageEditText.getText().toString();
-        } else {
-            StringBuilder data = new StringBuilder();
-            for(int i=0; i<Integer.parseInt(messageEditText.getText().toString()); i++) {
-                data.append("a");
-            }
-            output = data.toString();
-        }
-
+        String output = messageEditText.getText().toString();
         if(output.isEmpty()) {
             ToastUtil.showToast(getContext(),"message is empty");
             return;
@@ -174,7 +214,7 @@ public class CommFragment extends BaseFragment {
                 @Override
                 public void run() {
                     for(int i = 0; i<iterations; i++) {
-                        getViewController().onSendMessageRequested(message);
+                        getViewController().onSendMessageRequested(message.getBytes());
                         try {
                             Thread.sleep(delay);
                         } catch (InterruptedException e) {
@@ -184,26 +224,50 @@ public class CommFragment extends BaseFragment {
                 }
             }).start();
         } else {
-            getViewController().onSendMessageRequested(output);
+            try {
+                getViewController().onSendMessageRequested(output.getBytes("UTF-8"));
+            } catch (UnsupportedEncodingException e) {
+                e.printStackTrace();
+                getViewController().onSendMessageRequested(output.getBytes());
+            }
         }
 
     }
 
+    private String getAscendingBytesDataString(int count) {
+        StringBuilder output = new StringBuilder();
+        int startIndex = 48;
+        int endIndex = 126;
+        int a = 0;
+        for(int i=0; i<count; i++) {
+            int asciiIndex = startIndex+i-(endIndex-startIndex+1)*a;
+            if(asciiIndex == endIndex+1){
+                a++;
+                asciiIndex = startIndex+i-(endIndex-startIndex+1)*a;
+            }
+            output.append(Character.toString((char)asciiIndex));
+        }
+        return output.toString();
+    }
+
     public void onDataReceived(String msg) {
         responseTextView.setText(msg);
-        if(loopBackModeCheckBox.isChecked()) {
+        if (loopBackModeCheckBox.isChecked()) {
             messageEditText.setText(msg);
             sendDataButton.callOnClick();
         }
     }
 
-    public void onMessageSendingFinished() {
-        getActivity().runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                sendDataButton.setEnabled(true);
-            }
-        });
+    public void onDataSent(final String sentData) {
+        try {
+            getActivity().runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    messageEditText.setText(sentData);
+                }
+            });
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
-
 }

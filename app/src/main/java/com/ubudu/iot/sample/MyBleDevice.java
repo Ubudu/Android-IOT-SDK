@@ -10,6 +10,6 @@ public class MyBleDevice {
 
     public static final String WRITE_CHARACTERISTIC_UUID = "0000ffe1-0000-1000-8000-00805f9b34fb";
 
-    public static final String READ_CHARACTERISTIC_UUID = "0000ffe1-0000-1000-8000-00805f9b34fb";
+    public static final String READ_CHARACTERISTIC_UUID = "0000ffe2-0000-1000-8000-00805f9b34fb";
 
 }
