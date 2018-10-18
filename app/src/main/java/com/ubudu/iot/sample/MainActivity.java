@@ -12,7 +12,6 @@ import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.HandlerThread;
 import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.annotation.RequiresApi;
@@ -60,9 +59,8 @@ import com.ubudu.iot.sample.util.CustomTypefaceSpan;
 import com.ubudu.iot.sample.util.FragmentUtils;
 import com.ubudu.iot.sample.util.ToastUtil;
 import com.ubudu.iot.util.LongDataProtocol;
-import com.ubudu.iot.util.LongDataProtocolV2;
+import com.ubudu.iot.util.LongDataProtocolV3;
 
-import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -81,8 +79,6 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
     private static final int ASK_GEOLOCATION_PERMISSION_REQUEST_ON_SCAN = 1;
     private static final int ASK_GEOLOCATION_PERMISSION_REQUEST_ON_SEND_DATA = 2;
 
-    private Handler mEncodeAudioHandler;
-
     private BleDevice mBleDevice;
     private BluetoothGattService selectedService;
     private Advertiser advertiser;
@@ -100,7 +96,7 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
     private DrawerLayout mRootView;
 
     @BindView(R.id.navigation_view)
-    NavigationView navigationView;
+    android.support.design.widget.NavigationView navigationView;
     @BindView(R.id.toolbar)
     Toolbar toolbar;
 
@@ -117,10 +113,14 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
         public void onDataSent(byte[] data) {
             dismissProgressDialog();
             Log.i(TAG, "Data successfully sent: " + Arrays.toString(data) );
+            if(commFragment!=null)
+                commFragment.onDataSent(new String(data));
         }
 
         @Override
         public void onError(final Error error) {
+            if(commFragment!=null)
+                commFragment.onDataSent(null);
             Log.e(TAG, error.getLocalizedMessage());
         }
     };
@@ -129,17 +129,12 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
         @Override
         public void onDataReceived(final byte[] data) {
 
-            Log.i(TAG, "Received data len: " + data.length);
+            Log.i(TAG, "Received data len: " + data.length + ", data: "+new String(data));
             if (commFragment != null) {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        try {
-                            commFragment.onDataReceived(new String(data, "UTF-8"));
-                        } catch (UnsupportedEncodingException e) {
-                            e.printStackTrace();
-                            commFragment.onDataReceived(new String(data));
-                        }
+                        commFragment.onDataReceived(Arrays.toString(data));
                     }
                 });
             }
@@ -209,9 +204,9 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
         setContentView(mRootView);
         ButterKnife.bind(this);
 
-        longDataProtocol = new LongDataProtocolV2();
+        longDataProtocol = new LongDataProtocolV3();
 
-        Log.i(TAG,"Using Ubudu IOT-SDK v"+ Iot.getVersion()+"("+ Iot.getVersionCode()+")");
+        Log.i(TAG,"Using Ubudu IOT-SDK v"+Iot.getVersion()+"("+Iot.getVersionCode()+")");
 
         mSharedPref = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
         rssiThreshold = mSharedPref.getInt("rssi_filter_value", -90);
@@ -265,9 +260,12 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
 
                 @Override
                 public String getReadCharacteristicUuid() {
-                    return MyBleDevice.READ_CHARACTERISTIC_UUID;
+                    return MyBleDevice.NOTIFICATION_CHARACTERISTIC_UUID;
                 }
             });
+
+            peripheralManager.setLongMessageProtocol(new LongDataProtocolV3());
+
             peripheralManager.setEventListener(new PeripheralManager.PeripheralListener() {
                 @Override
                 public void onPeripheralReady() {
@@ -305,8 +303,6 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
                         }
                     });
                     Log.d(TAG, msg);
-
-
                 }
 
                 @Override
@@ -573,28 +569,39 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
 
         // set long msg protocol for handling long data
         this.mBleDevice.setLongMessageProtocol(longDataProtocol);
-
+        this.mBleDevice.setNegotiateMtuEnabled(true);
         this.mBleDevice.connect(getApplicationContext(), new ConnectionListener() {
             @Override
             public void onConnected() {
-                ToastUtil.showToast(getApplicationContext(),"MTU: "+mBleDevice.getMtu());
-
-                Log.i(TAG, "Connected to ble device: "+mBleDevice.getDevice().getName());
-                mBleDevice.setDataReceivedEventListener(mDataReceivedEventListener);
-                dismissProgressDialog();
-
-                showProgressDialog(getString(R.string.discovering_services));
-                onSelectServiceFragmentRequested(new CompletionListener() {
+                runOnUiThread(new Runnable() {
                     @Override
-                    public void onCompleted() {
+                    public void run() {
+                        ToastUtil.showToast(getApplicationContext(), "MTU: " + mBleDevice.getMtu());
+
+
+                        Log.i(TAG, "Connected to ble device: " + mBleDevice.getDevice().getName());
+                        mBleDevice.setDataReceivedEventListener(mDataReceivedEventListener);
                         dismissProgressDialog();
-                        onSelectNotificationCharacteristicFragmentRequested(new CompletionListener() {
+
+                        showProgressDialog(getString(R.string.discovering_services));
+                        onSelectServiceFragmentRequested(new CompletionListener() {
                             @Override
                             public void onCompleted() {
-                                onSelectWriteCharacteristicFragmentRequested(new CompletionListener() {
+                                dismissProgressDialog();
+                                onSelectNotificationCharacteristicFragmentRequested(new CompletionListener() {
                                     @Override
                                     public void onCompleted() {
-                                        onCommFragmentRequested();
+                                        onSelectWriteCharacteristicFragmentRequested(new CompletionListener() {
+                                            @Override
+                                            public void onCompleted() {
+                                                onCommFragmentRequested();
+                                            }
+
+                                            @Override
+                                            public void onCancelled() {
+
+                                            }
+                                        });
                                     }
 
                                     @Override
@@ -606,16 +613,11 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
 
                             @Override
                             public void onCancelled() {
-
+                                if (mBleDevice != null)
+                                    mBleDevice.disconnect();
+                                dismissProgressDialog();
                             }
                         });
-                    }
-
-                    @Override
-                    public void onCancelled() {
-                        if(mBleDevice!=null)
-                            mBleDevice.disconnect();
-                        dismissProgressDialog();
                     }
                 });
             }
@@ -629,12 +631,17 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
             }
 
             @Override
-            public void onConnectionError(Error error) {
+            public void onConnectionError(final Error error) {
                 dismissProgressDialog();
-                ToastUtil.showToast(getApplicationContext(), error.getLocalizedMessage());
-                Log.e(TAG, error.getLocalizedMessage());
-                mBleDevice = null;
-                onScannedDevicesFragmentRequested();
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        ToastUtil.showToast(getApplicationContext(), error.getLocalizedMessage());
+                        Log.e(TAG, error.getLocalizedMessage());
+                        mBleDevice = null;
+                        onScannedDevicesFragmentRequested();
+                    }
+                });
             }
         });
     }
@@ -709,30 +716,35 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
             public void onServicesDiscovered(final List<BluetoothGattService> services) {
                 dismissProgressDialog();
 
-                List<Option> options = new ArrayList<Option>();
+                final List<Option> options = new ArrayList<Option>();
                 for (BluetoothGattService service : services) {
                     options.add(new Option(service.getUuid().toString(), ""));
                 }
 
-                onOptionSelectionFragmentRequested(getString(R.string.title_service), options, new ChooseListener() {
-
+                runOnUiThread(new Runnable() {
                     @Override
-                    public void onOptionChosen(String option) {
-                        BluetoothGattService selected = null;
-                        for (BluetoothGattService service : services) {
-                            if (service.getUuid().toString().equalsIgnoreCase(option)) {
-                                selected = service;
-                                break;
+                    public void run() {
+                        onOptionSelectionFragmentRequested(getString(R.string.title_service), options, new ChooseListener() {
+
+                            @Override
+                            public void onOptionChosen(String option) {
+                                BluetoothGattService selected = null;
+                                for (BluetoothGattService service : services) {
+                                    if (service.getUuid().toString().equalsIgnoreCase(option)) {
+                                        selected = service;
+                                        break;
+                                    }
+                                }
+                                selectedService = selected;
+
+                                listener.onCompleted();
                             }
-                        }
-                        selectedService = selected;
 
-                        listener.onCompleted();
-                    }
-
-                    @Override
-                    public void onChooserCancelled() {
-                        listener.onCancelled();
+                            @Override
+                            public void onChooserCancelled() {
+                                listener.onCancelled();
+                            }
+                        });
                     }
                 });
             }
@@ -856,9 +868,9 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
     }
 
     @Override
-    public void onSendMessageRequested(byte[] data) {
+    public void onSendMessageRequested(byte[] data, int dataType) {
         if(gattCharForWriting!=null && mBleDevice!=null && mBleDevice.isConnected()) {
-            mBleDevice.send(data, gattCharForWriting, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
+            mBleDevice.send(data, gattCharForWriting, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE, dataType, false);
         }
     }
 

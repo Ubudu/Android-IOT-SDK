@@ -14,7 +14,7 @@ Add Ubudu nexus repository url to your `build.gradle` file:
     
 Then add the following dependency:
 
-    compile('com.ubudu.iot:iot-sdk:1.5.0@aar')
+    compile('com.ubudu.iot:iot-sdk:1.6.3@aar')
 
 ## How to use?
 
@@ -72,6 +72,14 @@ The flow of discovery is as follows:
 
 ### Bluetooth LE connection
 
+It is possible to negotiate MTU of the connection. To enable negotiation the following must be called bofore connecting:
+
+    this.mBleDevice.setNegotiateMtuEnabled(true);
+
+By default the SDK will try to negotiate maximum MTU of 276 bytes. To ask for specific MTU size the following method must be called:
+
+    this.mBleDevice.setDesiredMtu(mDesiredMtuInt);
+
 Then to connect to the BLE device call the following:
 
 	mBleDevice.connect(mContext, new BleDevice.ConnectionListener() {
@@ -90,7 +98,6 @@ Then to connect to the BLE device call the following:
 			// connection error
 		}
 	});
-
 
 To disconnect from the device please call:
 
@@ -150,7 +157,7 @@ The `DataListener` can be set any time before registering for notifications, e.g
 To send data to the Bleutooth LE device:
 
 	String message = "My message.";
-	mBleDevice.send(message.getBytes(), gattCharacteristic);
+	mBleDevice.send(message.getBytes(), BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT, gattCharacteristic);
 
 To be notified about the result of sending the data a `DataSentListener` implementation must be set on the `BleDevice` instance:
 

@@ -56,7 +56,7 @@ public class BaseFragment extends Fragment {
         void onScannedDevicesFragmentResumed();
         void onAdvertiseRequested();
         void onScanningRequested();
-        void onSendMessageRequested(byte[] data);
+        void onSendMessageRequested(byte[] data, int dataType);
         void onScannedDevicesFragmentPaused();
 
         void onPeripheralFragmentRequested();

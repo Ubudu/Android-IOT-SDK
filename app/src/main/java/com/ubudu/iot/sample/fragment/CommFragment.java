@@ -17,8 +17,7 @@ import android.widget.TextView;
 
 import com.ubudu.iot.sample.R;
 import com.ubudu.iot.sample.util.ToastUtil;
-
-import java.io.UnsupportedEncodingException;
+import com.ubudu.iot.util.LongDataProtocolV3;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
@@ -206,30 +205,28 @@ public class CommFragment extends BaseFragment {
         }
 
         if(streamCheckBox.isChecked()) {
-            final String message = output;
-            final int delay = Integer.parseInt(streamDelayEditText.getText().toString());
             final int iterations = Integer.parseInt(streamIterationsEditText.getText().toString());
+            if(iterations > 0) {
+                sendDataButton.setEnabled(false);
+                final String message = output;
+                final int delay = Integer.parseInt(streamDelayEditText.getText().toString());
 
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    for(int i = 0; i<iterations; i++) {
-                        getViewController().onSendMessageRequested(message.getBytes());
-                        try {
-                            Thread.sleep(delay);
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        for (int i = 0; i < iterations; i++) {
+                            getViewController().onSendMessageRequested(message.getBytes(), LongDataProtocolV3.DATA_TYPE_STRING);
+                            try {
+                                Thread.sleep(delay);
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
                         }
                     }
-                }
-            }).start();
-        } else {
-            try {
-                getViewController().onSendMessageRequested(output.getBytes("UTF-8"));
-            } catch (UnsupportedEncodingException e) {
-                e.printStackTrace();
-                getViewController().onSendMessageRequested(output.getBytes());
+                }).start();
             }
+        } else {
+            getViewController().onSendMessageRequested(output.getBytes(), LongDataProtocolV3.DATA_TYPE_STRING);
         }
 
     }
@@ -259,15 +256,32 @@ public class CommFragment extends BaseFragment {
     }
 
     public void onDataSent(final String sentData) {
-        try {
-            getActivity().runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    messageEditText.setText(sentData);
+
+        getActivity().runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if(streamCheckBox.isChecked()) {
+                    streamIterationsEditText.setText(String.valueOf(Integer.parseInt(streamIterationsEditText.getText().toString())-1));
+                    if(Integer.parseInt(streamIterationsEditText.getText().toString())==0){
+                        sendDataButton.setEnabled(true);
+                    }
                 }
-            });
-        } catch (Exception e) {
-            e.printStackTrace();
+            }
+        });
+
+        if(sentData==null)
+            ToastUtil.showToast(getContext(),"Data sending error");
+        else {
+            try {
+                getActivity().runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        messageEditText.setText(sentData);
+                    }
+                });
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
     }
 }
