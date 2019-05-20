@@ -818,7 +818,7 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
     @Override
     public void onAdvertiseRequested() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
-                && ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                && checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, ASK_GEOLOCATION_PERMISSION_REQUEST_ON_ADVERTISE);
             return;
         }
@@ -834,7 +834,7 @@ public class MainActivity extends AppCompatActivity implements BaseFragment.View
     @Override
     public void onScanningRequested() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
-                && ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                && checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, ASK_GEOLOCATION_PERMISSION_REQUEST_ON_SCAN);
             return;
         }
