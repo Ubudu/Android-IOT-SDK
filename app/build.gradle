@@ -44,7 +44,7 @@ dependencies {
     implementation 'com.jakewharton:butterknife:8.8.1'
     annotationProcessor 'com.jakewharton:butterknife-compiler:8.8.1'
 
-    implementation 'com.ubudu.iot:iot-sdk:1.6.3@aar'
+    implementation 'com.ubudu.iot:iot-sdk:1.6.5@aar'
 
     implementation 'com.afollestad.material-dialogs:core:0.9.4.7'
 

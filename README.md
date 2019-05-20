@@ -14,7 +14,7 @@ Add Ubudu nexus repository url to your `build.gradle` file:
     
 Then add the following dependency:
 
-    implementation 'com.ubudu.iot:iot-sdk:1.6.3@aar'
+    implementation 'com.ubudu.iot:iot-sdk:1.6.5@aar'
 
 ## How to use?
 
@@ -79,6 +79,9 @@ It is possible to negotiate MTU of the connection. To enable negotiation the fol
 By default the SDK will try to negotiate maximum MTU of 276 bytes. To ask for specific MTU size the following method must be called:
 
     this.mBleDevice.setDesiredMtu(mDesiredMtuInt);
+
+Note that some Android devices do not work well if you try to force MTU and communication can break of freeze because of that. 
+It depends on the particular device.
 
 Then to connect to the BLE device call the following:
 
